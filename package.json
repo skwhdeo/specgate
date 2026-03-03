@@ -1,0 +1,39 @@
+{
+  "name": "specgate",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "gate:lint": "node harness/gates/run.js lint",
+    "gate:typecheck": "node harness/gates/run.js typecheck",
+    "gate:test": "node harness/gates/run.js test",
+    "gate:arch": "node harness/gates/run.js arch",
+    "gate:browser": "node harness/gates/run.js browser",
+    "harness:run": "node harness/runner/run.js",
+    "harness:run:browser": "node harness/runner/run.js --with-browser",
+    "harness:reverify": "node harness/runner/run.js --reverify",
+    "harness:reverify:browser": "node harness/runner/run.js --reverify --with-browser",
+    "harness:loop": "node harness/runner/run.js --loop",
+    "harness:loop:browser": "node harness/runner/run.js --loop --with-browser",
+    "harness:orchestrate": "node harness/orchestrator/sdk-loop.mjs",
+    "harness:orchestrate:browser": "node harness/orchestrator/sdk-loop.mjs --with-browser",
+    "harness:autopilot": "node harness/orchestrator/autopilot.mjs",
+    "harness:autopilot:browser": "node harness/orchestrator/autopilot.mjs --with-browser",
+    "speckit:check": "uvx --from git+https://github.com/github/spec-kit.git specify check",
+    "speckit:init:generic": "uvx --from git+https://github.com/github/spec-kit.git specify init --here --ai generic --ai-commands-dir .pi/prompts/speckit --force --ignore-agent-tools",
+    "harness:review": "node harness/review/delegate-to-subagent.mjs",
+    "harness:review:test": "node harness/review/delegate-to-subagent.mjs --review-type test-quality --focus \"Assess whether tests cover real behavior and resist cheating\"",
+    "harness:review:code": "node harness/review/delegate-to-subagent.mjs --review-type code-quality --focus \"Assess correctness, maintainability, and risk\"",
+    "harness:metrics": "node harness/metrics/report.js",
+    "specgate:run": "npm run harness:run",
+    "specgate:reverify": "npm run harness:reverify",
+    "specgate:loop": "npm run harness:loop",
+    "specgate:orchestrate": "npm run harness:orchestrate",
+    "specgate:autopilot": "npm run harness:autopilot",
+    "specgate:review:test": "npm run harness:review:test",
+    "specgate:metrics": "npm run harness:metrics"
+  },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "^0.50.1",
+    "ajv": "^8.18.0"
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "version": "harness-config-v1",
+  "projectRoot": "<target-project-path>",
+  "paths": {
+    "stateFile": ".pi/specgate/state/state.json",
+    "checkpointFile": ".pi/specgate/state/checkpoint.md",
+    "lastFailureFile": ".pi/specgate/state/last-failure.json",
+    "beforeLoopStateFile": ".pi/specgate/state/state.before-loop.json",
+    "artifactsDir": ".pi/specgate/artifacts",
+    "scanDirs": ["harness", "<target-project-path>/apps"]
+  },
+  "runner": {
+    "defaultGates": ["lint", "typecheck", "test", "arch"],
+    "browserGate": "browser"
+  },
+  "loop": {
+    "enabled": false,
+    "sleepMs": 2000,
+    "maxCycles": 30,
+    "maxWallTimeMs": 1800000,
+    "maxSameFingerprint": 3
+  },
+  "orchestrator": {
+    "enabled": false,
+    "mode": "sdk",
+    "maxAttempts": 8,
+    "maxWallTimeMs": 3600000,
+    "sleepMs": 1000,
+    "goal": "Fix target project until harness gates pass"
+  },
+  "autopilot": {
+    "enabled": false,
+    "taskFile": "docs/tasks.md",
+    "maxWorkTimeMs": 7200000,
+    "maxAttemptsPerTask": 4,
+    "blockedFingerprintThreshold": 3,
+    "sleepMs": 1000,
+    "subagentDebateOnBlocked": true,
+    "worktree": {
+      "enabled": false,
+      "rootDir": ".worktrees",
+      "branchPrefix": "autopilot",
+      "resultMode": "branch",
+      "cleanupOnSuccess": false,
+      "cleanupOnFail": false,
+      "requireCleanBaseRepo": true
+    }
+  },
+  "gates": {
+    "lint": {
+      "command": "npm --prefix <target-project-path> run lint",
+      "timeoutMs": 180000
+    },
+    "typecheck": {
+      "command": "npm --prefix <target-project-path> run typecheck",
+      "timeoutMs": 180000
+    },
+    "test": {
+      "command": "npm --prefix <target-project-path> test",
+      "timeoutMs": 180000
+    },
+    "browser": {
+      "command": "npm --prefix <target-project-path> run test:browser",
+      "timeoutMs": 300000,
+      "requires": {
+        "apiHealthUrl": "http://127.0.0.1:3000/health",
+        "uiBaseUrl": "http://127.0.0.1:5173"
+      }
+    }
+  }
+}
