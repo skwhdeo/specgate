@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "specgate/subagent-observability",
+  "title": "Subagent Observability Artifact",
+  "type": "object",
+  "required": ["invocationId", "runId", "attempt", "createdAt"],
+  "properties": {
+    "invocationId": { "type": "string" },
+    "runId": { "type": "string" },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "stage": { "type": "string" },
+    "reviewType": { "type": "string" },
+    "reason": { "type": "string" },
+    "decision": { "type": ["string", "null"] },
+    "severity": { "type": ["string", "null"], "enum": ["low", "medium", "high", null] },
+    "redactionReport": {
+      "type": "object",
+      "properties": {
+        "rulesApplied": { "type": "array", "items": { "type": "string" } },
+        "replacementsCount": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "truncation": {
+      "type": "object",
+      "properties": {
+        "wasTruncated": { "type": "boolean" },
+        "maxBytes": { "type": "integer", "minimum": 1 },
+        "originalBytes": { "type": "integer", "minimum": 0 },
+        "keptBytes": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": true
+    },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": true
+}

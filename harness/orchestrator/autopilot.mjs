@@ -339,8 +339,8 @@ function normalizeResultMode(mode) {
   return 'branch';
 }
 
-function writePatchResult({ executionRoot, baseRoot, jobId, lastFailurePath }) {
-  const patchDir = path.join(baseRoot, 'harness', 'artifacts');
+function writePatchResult({ executionRoot, patchArtifactsDir, jobId, lastFailurePath }) {
+  const patchDir = patchArtifactsDir;
   const patchPath = path.join(patchDir, `autopilot-result-${jobId}.patch`);
   fs.mkdirSync(patchDir, { recursive: true });
 
@@ -524,7 +524,7 @@ async function main() {
       if (resultMode === 'patch') {
         patchPath = writePatchResult({
           executionRoot,
-          baseRoot: ROOT,
+          patchArtifactsDir: artifactsDir,
           jobId,
           lastFailurePath,
         });

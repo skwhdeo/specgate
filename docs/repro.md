@@ -173,7 +173,8 @@ docker ps
 - 해결: worktree 브랜치에서 변경사항 확인 후 수동 merge 또는 `resultMode=patch`로 재실행.
 
 ### 정리(cleanup) 관련
-- 실패 후 worktree 경로가 로그에 남지 않으면 `harness/artifacts/job-manifest.json`을 확인한다.
+- 실패 후 worktree 경로가 로그에 남지 않으면 `.pi/specgate/artifacts/job-manifest.json`을 확인한다.
+- `resultMode=patch` 산출물은 기본적으로 `.pi/specgate/artifacts/autopilot-result-<jobId>.patch`에 저장된다.
 - 수동 정리: `git worktree remove <path>` 및 필요 시 `git branch -D <branch>` 실행.
 
 ### 복구/재시도
