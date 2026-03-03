@@ -1,7 +1,7 @@
 # Tasks: 001-self-improve-orchestrator
 
 ## O0 Baseline
-- [ ] Capture current autopilot baseline metrics (attempt count, stop reasons, avg loop duration)
+- [x] Capture current autopilot baseline metrics (attempt count, stop reasons, avg loop duration)
 
 ## O1 Progress scoring
 - [ ] Add attempt scoring helper module

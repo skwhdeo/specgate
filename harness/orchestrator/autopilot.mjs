@@ -6,8 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createAgentSession, SessionManager } from '@mariozechner/pi-coding-agent';
 import {
+  addWorktree,
+  buildWorktreeBranchName,
   createJobId,
   removeWorktree,
+  resolveBranchPrefix,
   resolveWorktreeRoot,
 } from './worktree-utils.mjs';
 
@@ -148,7 +151,9 @@ function ensureBaseRepoUnchanged({ cwd, lastFailurePath }) {
 function getArg(name) {
   const i = process.argv.indexOf(name);
   if (i === -1 || i === process.argv.length - 1) return undefined;
-  return process.argv[i + 1];
+  const v = process.argv[i + 1];
+  if (!v || v.startsWith('--')) return undefined;
+  return v;
 }
 
 function getNumberArg(name) {
@@ -296,11 +301,11 @@ function appendLog(artifactsDir, payload) {
   fs.appendFileSync(file, `${JSON.stringify(payload)}\n`, 'utf8');
 }
 
-function resolveFeatureTaskFile(baseRoot, feature) {
+function resolveFeatureTaskFile(feature) {
   if (!feature) return null;
   const normalized = String(feature).trim().replace(/^specs\//, '').replace(/\/$/, '');
   if (!normalized) return null;
-  return path.join(baseRoot, 'specs', normalized, 'tasks.md');
+  return path.join('specs', normalized, 'tasks.md');
 }
 
 function resolveFromRoot(baseRoot, targetPath) {
@@ -417,10 +422,8 @@ async function main() {
   };
 
   const feature = getArg('--feature') || process.env.SPECIFY_FEATURE;
-  const taskFileFromFeature = resolveFeatureTaskFile(ROOT, feature);
+  const taskFileFromFeature = resolveFeatureTaskFile(feature);
   const taskFileInput = getArg('--task-file') || taskFileFromFeature || config.autopilot.taskFile;
-  const taskFile = resolveFromRoot(ROOT, taskFileInput);
-  const taskFileDisplay = displayPath(ROOT, taskFile);
   const maxWorkTimeMs = getNumberArg('--max-work-time-ms') ?? config.autopilot.maxWorkTimeMs;
   const maxAttemptsPerTask = getNumberArg('--max-attempts-per-task') ?? config.autopilot.maxAttemptsPerTask;
   const blockedThreshold = getNumberArg('--blocked-fingerprint-threshold') ?? config.autopilot.blockedFingerprintThreshold;
@@ -440,6 +443,24 @@ async function main() {
   const resultMode = normalizeResultMode(getArg('--result-mode') || worktreeConfig.resultMode || 'branch');
   const cleanupOnSuccess = hasArg('--cleanup-on-success') || Boolean(worktreeConfig.cleanupOnSuccess);
   const cleanupOnFail = hasArg('--cleanup-on-fail') || Boolean(worktreeConfig.cleanupOnFail);
+
+  if (worktreeEnabled && executionRoot !== ROOT) {
+    const gitDir = path.join(executionRoot, '.git');
+    if (!fs.existsSync(gitDir)) {
+      fs.mkdirSync(worktreeRoot, { recursive: true });
+      const branchPrefix = resolveBranchPrefix(worktreeConfig.branchPrefix);
+      const branch = buildWorktreeBranchName({ prefix: branchPrefix, jobId });
+      const added = addWorktree({ cwd: ROOT, worktreePath: executionRoot, branch, baseRef: 'HEAD', dryRun });
+      if (!added.ok) {
+        const message = `[autopilot] failed to create worktree at ${executionRoot}: ${added.error?.message || added.stderr || 'git worktree add failed'}`;
+        console.error(message);
+        process.exit(1);
+      }
+    }
+  }
+
+  const taskFile = resolveFromRoot(executionRoot, taskFileInput);
+  const taskFileDisplay = displayPath(executionRoot, taskFile);
 
   if (!fs.existsSync(taskFile)) {
     console.error(`[autopilot] task file not found: ${taskFileDisplay}`);
@@ -570,7 +591,9 @@ async function main() {
       else console.log(`\n[prompt-preview]\n${prompt}\n`);
 
       const verify = runHarnessReverify(withBrowser, executionRoot);
-      ensureBaseRepoUnchanged({ cwd: ROOT, lastFailurePath: baseLastFailurePath });
+      if (worktreeEnabled && executionRoot !== ROOT) {
+        ensureBaseRepoUnchanged({ cwd: ROOT, lastFailurePath: baseLastFailurePath });
+      }
       const state = readJson(statePath, {});
       const nowFailure = readJson(lastFailurePath, null);
 
