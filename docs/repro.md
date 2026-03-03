@@ -95,6 +95,7 @@ node harness/orchestrator/autopilot.mjs \
 - `--max-work-time-ms <n>`: 총 작업 시간 제한
 - `--max-attempts-per-task <n>`: task별 최대 시도
 - `--blocked-fingerprint-threshold <n>`: 동일 실패 반복 시 blocked 판정
+- `--progress-score-threshold <n>`: progress score가 낮을 때 blocked 판단 보강
 - `--feature <spec-folder>`: `specs/<feature>/tasks.md`를 task 파일로 사용
 - `--no-debate`: 막힘 시 서브에이전트 토론 비활성화
 - `--worktree <path>`: worktree 경로 지정

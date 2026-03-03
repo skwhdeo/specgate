@@ -99,6 +99,10 @@ node harness/orchestrator/sdk-loop.mjs --max-attempts 3 --sleep-ms 2000
 - 파일: `harness/orchestrator/autopilot.mjs`
 - `docs/tasks.md`의 미완료 체크박스를 순차 수행
 - timebox(`maxWorkTimeMs`) 안에서 task별 반복 시도
+- attempt score 계산(게이트 변화, fingerprint 변화, 변경 파일 관련성)
+- 실패 분류(`lint/typecheck/test/arch/browser`)에 따른 strategy profile 주입
+- fileCandidates 기반 packed context(상위 N개 파일 스니펫, 바이트 제한)
+- blocked 판단: fingerprint 반복 + 낮은 progress score
 - blocked 시 `delegate_to_subagent` A/B 토론 결과를 다음 시도 프롬프트에 주입
 - Pi 명령: `/harness-autopilot`
 

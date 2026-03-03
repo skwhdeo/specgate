@@ -13,6 +13,10 @@ import {
   resolveBranchPrefix,
   resolveWorktreeRoot,
 } from './worktree-utils.mjs';
+import { computeAttemptScore } from './attempt-score.mjs';
+import { classifyFailure } from './failure-class.mjs';
+import { selectStrategyProfile } from './strategy-profiles.mjs';
+import { packContext } from './context-pack.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,6 +42,7 @@ const defaultConfig = {
     maxWorkTimeMs: 2 * 60 * 60 * 1000,
     maxAttemptsPerTask: 4,
     blockedFingerprintThreshold: 3,
+    progressScoreThreshold: 0.1,
     sleepMs: 1000,
     subagentDebateOnBlocked: true,
   },
@@ -74,6 +79,26 @@ function getRepoStatus(cwd) {
   }
   const entries = (result.stdout || '').split(/\r?\n/).filter(Boolean);
   return { ok: true, entries };
+}
+
+function extractChangedFiles(statusEntries) {
+  if (!Array.isArray(statusEntries)) return [];
+  const files = [];
+  statusEntries.forEach((entry) => {
+    const trimmed = entry.trim();
+    if (trimmed.length < 4) return;
+    const raw = trimmed.slice(3);
+    if (!raw) return;
+    const parts = raw.split(' -> ');
+    files.push(parts[parts.length - 1]);
+  });
+  return files.filter(Boolean);
+}
+
+function getChangedFiles(cwd) {
+  const status = getRepoStatus(cwd);
+  if (!status.ok) return [];
+  return extractChangedFiles(status.entries);
 }
 
 function requireCleanBaseRepo({ cwd, lastFailurePath }) {
@@ -268,11 +293,44 @@ function summarizeDebate(artifactPath) {
   ].join('\n');
 }
 
-function buildPrompt({ goal, task, attempt, maxAttemptsPerTask, lastFailure, debateNotes, taskFileDisplay }) {
+function buildPrompt({
+  goal,
+  task,
+  attempt,
+  maxAttemptsPerTask,
+  lastFailure,
+  lastAttemptScore,
+  debateNotes,
+  taskFileDisplay,
+  strategyProfile,
+  packedContext,
+}) {
   const failed = Array.isArray(lastFailure?.failedGates)
     ? lastFailure.failedGates.map((g) => `${g.gate}:${g.exitCode}`).join(', ')
     : 'n/a';
   const errors = Array.isArray(lastFailure?.topErrors) ? lastFailure.topErrors.slice(0, 6).map((e) => `- ${e}`) : [];
+  const attemptScoreLine = lastAttemptScore
+    ? `Last attempt score: ${Number(lastAttemptScore.score || 0).toFixed(2)}`
+    : 'Last attempt score: n/a';
+  const strategyLines = strategyProfile
+    ? [
+        `Strategy profile: ${strategyProfile.key}`,
+        `Strategy focus: ${strategyProfile.focus}`,
+        'Strategy tactics:',
+        ...strategyProfile.tactics.map((tactic) => `- ${tactic}`),
+      ]
+    : ['Strategy profile: mixed-default'];
+  const contextLines = packedContext
+    ? [
+        'Packed context:',
+        ...packedContext.files.map((entry) =>
+          [
+            `File: ${entry.path} (${entry.bytes} bytes${entry.truncated ? ', truncated' : ''})`,
+            entry.snippet ? entry.snippet : '[empty]',
+          ].join('\n'),
+        ),
+      ]
+    : ['Packed context: n/a'];
 
   return [
     'You are in autopilot mode. Work independently on one task at a time.',
@@ -280,6 +338,8 @@ function buildPrompt({ goal, task, attempt, maxAttemptsPerTask, lastFailure, deb
     `Current task section: ${task.section || 'unknown'}`,
     `Current task: ${task.text}`,
     `Task attempt: ${attempt}/${maxAttemptsPerTask}`,
+    attemptScoreLine,
+    ...strategyLines,
     '',
     'Required behavior:',
     '- Make focused edits for this task only.',
@@ -290,6 +350,8 @@ function buildPrompt({ goal, task, attempt, maxAttemptsPerTask, lastFailure, deb
     'Latest harness failure:',
     `failedGates: ${failed}`,
     ...errors,
+    '',
+    ...contextLines,
     '',
     debateNotes ? `Blocked-debate hints:\n${debateNotes}` : 'Blocked-debate hints: n/a',
   ].join('\n');
@@ -427,6 +489,7 @@ async function main() {
   const maxWorkTimeMs = getNumberArg('--max-work-time-ms') ?? config.autopilot.maxWorkTimeMs;
   const maxAttemptsPerTask = getNumberArg('--max-attempts-per-task') ?? config.autopilot.maxAttemptsPerTask;
   const blockedThreshold = getNumberArg('--blocked-fingerprint-threshold') ?? config.autopilot.blockedFingerprintThreshold;
+  const progressScoreThreshold = getNumberArg('--progress-score-threshold') ?? config.autopilot.progressScoreThreshold;
   const sleepMs = getNumberArg('--sleep-ms') ?? config.autopilot.sleepMs;
   const withBrowser = hasArg('--with-browser');
   const dryRun = hasArg('--dry-run');
@@ -490,6 +553,7 @@ async function main() {
     maxWorkTimeMs,
     maxAttemptsPerTask,
     blockedThreshold,
+    progressScoreThreshold,
     withBrowser,
     dryRun,
     resultMode,
@@ -571,19 +635,34 @@ async function main() {
     let lastFp = null;
     let repeatCount = 0;
     let debateNotes = '';
+    let lastAttemptScore = null;
+    let blockedReason = null;
 
     for (let attempt = 1; attempt <= maxAttemptsPerTask; attempt += 1) {
       if (Date.now() - startedAt >= maxWorkTimeMs) break;
 
       const lastFailure = readJson(lastFailurePath, null);
+      const failureClass = classifyFailure(lastFailure);
+      const strategyProfile = selectStrategyProfile(failureClass.primary);
+      const fileCandidates = lastFailure?.fileCandidates || [];
+      const packedContext = packContext({
+        repoRoot: executionRoot,
+        fileCandidates,
+        maxFiles: 5,
+        maxBytesPerFile: 2000,
+        maxTotalBytes: 8000,
+      });
       const prompt = buildPrompt({
         goal: config.orchestrator.goal,
         task,
         attempt,
         maxAttemptsPerTask,
         lastFailure,
+        lastAttemptScore,
         debateNotes,
         taskFileDisplay,
+        strategyProfile,
+        packedContext,
       });
 
       console.log(`[autopilot] attempt ${attempt}/${maxAttemptsPerTask}`);
@@ -596,6 +675,15 @@ async function main() {
       }
       const state = readJson(statePath, {});
       const nowFailure = readJson(lastFailurePath, null);
+      const changedFiles = getChangedFiles(executionRoot);
+      const fileCandidates = nowFailure?.fileCandidates || lastFailure?.fileCandidates || [];
+      const attemptScore = computeAttemptScore({
+        previousFailure: lastFailure,
+        currentFailure: nowFailure,
+        changedFiles,
+        fileCandidates,
+      });
+      lastAttemptScore = attemptScore;
 
       appendLog(artifactsDir, {
         at: new Date().toISOString(),
@@ -606,6 +694,7 @@ async function main() {
         harnessExitCode: verify.code,
         status: state.status,
         fingerprint: nowFailure?.fingerprint || null,
+        attemptScore,
       });
 
       const reparsed = parseTasks(taskFile);
@@ -628,7 +717,11 @@ async function main() {
       else repeatCount = 1;
       lastFp = fp;
 
-      if (repeatCount >= blockedThreshold && useDebate) {
+      const progressScore = Number.isFinite(attemptScore?.score) ? attemptScore.score : null;
+      const lowProgress = progressScore !== null && progressScore <= progressScoreThreshold;
+
+      if (repeatCount >= blockedThreshold && lowProgress && useDebate) {
+        blockedReason = `repeatFingerprint:${repeatCount};lowProgress:${progressScore?.toFixed(2) ?? 'n/a'}`;
         console.log('[autopilot] blocked detected. running subagent debate...');
         const aOut = path.join(artifactsDir, 'review-blocked-a.json');
         const bOut = path.join(artifactsDir, 'review-blocked-b.json');
@@ -655,6 +748,7 @@ async function main() {
         reason: 'LOOP_LIMIT_REACHED',
         failedGates: [],
         fingerprint: null,
+        blockedReason,
         topErrors: [`autopilot maxAttemptsPerTask reached for task: ${task.text}`],
         timestamp: new Date().toISOString(),
       });
@@ -681,6 +775,7 @@ async function main() {
     reason: 'LOOP_LIMIT_REACHED',
     failedGates: [],
     fingerprint: null,
+    blockedReason: null,
     topErrors: [`autopilot maxWorkTimeMs reached (${maxWorkTimeMs})`],
     timestamp: new Date().toISOString(),
   });
