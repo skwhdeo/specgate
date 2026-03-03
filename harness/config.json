@@ -1,13 +1,13 @@
 {
   "version": "harness-config-v1",
-  "projectRoot": "<target-project-path>",
+  "projectRoot": ".",
   "paths": {
     "stateFile": ".pi/specgate/state/state.json",
     "checkpointFile": ".pi/specgate/state/checkpoint.md",
     "lastFailureFile": ".pi/specgate/state/last-failure.json",
     "beforeLoopStateFile": ".pi/specgate/state/state.before-loop.json",
     "artifactsDir": ".pi/specgate/artifacts",
-    "scanDirs": ["harness", "<target-project-path>/apps"]
+    "scanDirs": ["harness", "./apps"]
   },
   "runner": {
     "defaultGates": ["lint", "typecheck", "test", "arch"],
@@ -48,19 +48,19 @@
   },
   "gates": {
     "lint": {
-      "command": "npm --prefix <target-project-path> run lint",
+      "command": "npm --prefix . run lint",
       "timeoutMs": 180000
     },
     "typecheck": {
-      "command": "npm --prefix <target-project-path> run typecheck",
+      "command": "npm --prefix . run typecheck",
       "timeoutMs": 180000
     },
     "test": {
-      "command": "npm --prefix <target-project-path> test",
+      "command": "npm --prefix . test",
       "timeoutMs": 180000
     },
     "browser": {
-      "command": "npm --prefix <target-project-path> run test:browser",
+      "command": "npm --prefix . run test:browser",
       "timeoutMs": 300000,
       "requires": {
         "apiHealthUrl": "http://127.0.0.1:3000/health",

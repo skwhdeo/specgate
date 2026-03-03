@@ -7,6 +7,10 @@
     "extensions": [".pi/extensions"]
   },
   "scripts": {
+    "lint": "node harness/scripts/check-syntax.mjs",
+    "typecheck": "node harness/scripts/check-syntax.mjs",
+    "test": "node --test",
+    "test:browser": "node -e \"console.log('No browser tests configured')\"",
     "gate:lint": "node harness/gates/run.js lint",
     "gate:typecheck": "node harness/gates/run.js typecheck",
     "gate:test": "node harness/gates/run.js test",
