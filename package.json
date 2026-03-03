@@ -2,6 +2,10 @@
   "name": "specgate",
   "private": true,
   "version": "0.1.0",
+  "keywords": ["pi-package", "specgate", "harness"],
+  "pi": {
+    "extensions": [".pi/extensions"]
+  },
   "scripts": {
     "gate:lint": "node harness/gates/run.js lint",
     "gate:typecheck": "node harness/gates/run.js typecheck",

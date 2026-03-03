@@ -1,6 +1,25 @@
-# specgate (formerly specgate)
+# specgate (formerly my-harness)
 
 Spec-driven + gate-driven 자동 구현 하네스입니다.
+
+## Pi Agent 설치 (GitHub)
+
+### 글로벌 설치 (모든 프로젝트)
+```bash
+pi install git:github.com/skwhdeo/specgate
+```
+
+### 프로젝트 로컬 설치 (현재 프로젝트에만)
+```bash
+pi install -l git:github.com/skwhdeo/specgate
+```
+
+설치 후 Pi에서 `/reload`를 실행하면 명령이 로드됩니다.
+사용 가능 명령 예시:
+- `/specgate-init`
+- `/specgate-run`
+- `/specgate-autopilot`
+- `/specgate-status`
 
 ## 연결 대상 프로젝트
 기본 설정은 `<target-project-path>`를 대상으로 동작합니다.
@@ -38,5 +57,23 @@ npm run harness:run
 - spec-kit 연동 스크립트:
   - `npm run speckit:check`
   - `npm run speckit:init:generic`
+
+## SpecGate로 SpecGate 개발하기 (self-hosted loop)
+
+1. spec-kit 명령 초기화
+```bash
+specify init --here --ai generic --ai-commands-dir .pi/prompts/speckit --force --ignore-agent-tools
+```
+
+2. feature 스펙 작성 (예: `specs/001-self-improve-orchestrator/*`)
+3. Pi에서 실행:
+- `/speckit-autopilot --feature 001-self-improve-orchestrator --worktree --result-mode patch`
+
+4. 결과 검증:
+```bash
+npm run specgate:run
+npm run specgate:metrics
+```
+
 - 관계 설계 문서: `docs/harness-project-relationship.md`
 - 계약 문서: `docs/harness-contract.md`

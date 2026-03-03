@@ -4,4 +4,6 @@ coverage/
 *.log
 .DS_Store
 harness/artifacts/*.json
+.pi/specgate/
+.worktrees/
 *:Zone.Identifier
