@@ -368,7 +368,7 @@ export default function (pi: ExtensionAPI) {
         },
         autopilot: {
           enabled: false,
-          taskFile: 'docs/tasks.md',
+          taskFile: null,
           maxWorkTimeMs: 7200000,
           maxAttemptsPerTask: 4,
           blockedFingerprintThreshold: 3,

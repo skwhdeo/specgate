@@ -38,7 +38,7 @@ const defaultConfig = {
   },
   autopilot: {
     enabled: false,
-    taskFile: 'docs/tasks.md',
+    taskFile: null,
     maxWorkTimeMs: 2 * 60 * 60 * 1000,
     maxAttemptsPerTask: 4,
     blockedFingerprintThreshold: 3,
@@ -363,11 +363,63 @@ function appendLog(artifactsDir, payload) {
   fs.appendFileSync(file, `${JSON.stringify(payload)}\n`, 'utf8');
 }
 
-function resolveFeatureTaskFile(feature) {
-  if (!feature) return null;
+function listSpecTaskFiles(baseRoot) {
+  const specsRoot = path.join(baseRoot, 'specs');
+  if (!fs.existsSync(specsRoot)) return [];
+
+  const entries = fs.readdirSync(specsRoot, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => ({
+      featureDir: entry.name,
+      taskFile: path.join('specs', entry.name, 'tasks.md'),
+    }))
+    .filter((entry) => fs.existsSync(path.join(baseRoot, entry.taskFile)));
+}
+
+function resolveFeatureTaskFile(feature, baseRoot) {
+  if (!feature) return { taskFile: null, reason: 'no-feature' };
+
   const normalized = String(feature).trim().replace(/^specs\//, '').replace(/\/$/, '');
-  if (!normalized) return null;
-  return path.join('specs', normalized, 'tasks.md');
+  if (!normalized) return { taskFile: null, reason: 'empty-feature' };
+
+  const direct = path.join('specs', normalized, 'tasks.md');
+  if (fs.existsSync(path.join(baseRoot, direct))) {
+    return { taskFile: direct, reason: 'exact' };
+  }
+
+  const all = listSpecTaskFiles(baseRoot);
+  const q = normalized.toLowerCase();
+  const matched = all.filter((entry) => entry.featureDir.toLowerCase().includes(q));
+
+  if (matched.length === 1) {
+    return { taskFile: matched[0].taskFile, reason: 'partial' };
+  }
+
+  if (matched.length > 1) {
+    return {
+      taskFile: null,
+      reason: 'ambiguous-feature',
+      candidates: matched.map((entry) => entry.featureDir),
+    };
+  }
+
+  return { taskFile: null, reason: 'feature-not-found' };
+}
+
+function resolveAutoTaskFile(baseRoot) {
+  const all = listSpecTaskFiles(baseRoot);
+  if (all.length === 1) {
+    return { taskFile: all[0].taskFile, reason: 'single-spec' };
+  }
+  if (all.length > 1) {
+    return {
+      taskFile: null,
+      reason: 'multiple-specs',
+      candidates: all.map((entry) => entry.featureDir),
+    };
+  }
+  return { taskFile: null, reason: 'no-spec-tasks' };
 }
 
 function resolveFromRoot(baseRoot, targetPath) {
@@ -484,8 +536,13 @@ async function main() {
   };
 
   const feature = getArg('--feature') || process.env.SPECIFY_FEATURE;
-  const taskFileFromFeature = resolveFeatureTaskFile(feature);
-  const taskFileInput = getArg('--task-file') || taskFileFromFeature || config.autopilot.taskFile;
+  const featureTaskResolution = resolveFeatureTaskFile(feature, ROOT);
+  const cliTaskFile = getArg('--task-file');
+  const configTaskFile = config.autopilot.taskFile || null;
+  const autoTaskResolution = !cliTaskFile && !featureTaskResolution.taskFile && !configTaskFile
+    ? resolveAutoTaskFile(ROOT)
+    : { taskFile: null, reason: 'not-needed' };
+  const taskFileInput = cliTaskFile || featureTaskResolution.taskFile || configTaskFile || autoTaskResolution.taskFile;
   const maxWorkTimeMs = getNumberArg('--max-work-time-ms') ?? config.autopilot.maxWorkTimeMs;
   const maxAttemptsPerTask = getNumberArg('--max-attempts-per-task') ?? config.autopilot.maxAttemptsPerTask;
   const blockedThreshold = getNumberArg('--blocked-fingerprint-threshold') ?? config.autopilot.blockedFingerprintThreshold;
@@ -520,6 +577,25 @@ async function main() {
         process.exit(1);
       }
     }
+  }
+
+  if (!taskFileInput) {
+    const reasons = [];
+    if (featureTaskResolution.reason === 'ambiguous-feature') {
+      reasons.push(`feature "${feature}" is ambiguous: ${(featureTaskResolution.candidates || []).join(', ')}`);
+    } else if (feature && featureTaskResolution.reason === 'feature-not-found') {
+      reasons.push(`feature "${feature}" not found under specs/*/tasks.md`);
+    }
+
+    if (autoTaskResolution.reason === 'multiple-specs') {
+      reasons.push(`multiple spec task files found: ${(autoTaskResolution.candidates || []).join(', ')}`);
+    } else if (autoTaskResolution.reason === 'no-spec-tasks') {
+      reasons.push('no specs/*/tasks.md found');
+    }
+
+    const details = reasons.length > 0 ? `\n${reasons.map((r) => `- ${r}`).join('\n')}` : '';
+    console.error(`[autopilot] no task file resolved. use --feature <name> or --task-file <path>.${details}`);
+    process.exit(1);
   }
 
   const taskFile = resolveFromRoot(executionRoot, taskFileInput);
@@ -644,10 +720,10 @@ async function main() {
       const lastFailure = readJson(lastFailurePath, null);
       const failureClass = classifyFailure(lastFailure);
       const strategyProfile = selectStrategyProfile(failureClass.primary);
-      const fileCandidates = lastFailure?.fileCandidates || [];
+      const contextFileCandidates = lastFailure?.fileCandidates || [];
       const packedContext = packContext({
         repoRoot: executionRoot,
-        fileCandidates,
+        fileCandidates: contextFileCandidates,
         maxFiles: 5,
         maxBytesPerFile: 2000,
         maxTotalBytes: 8000,
